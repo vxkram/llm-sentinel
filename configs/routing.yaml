@@ -1,0 +1,16 @@
+# Canonical model -> provider + wire-level model id, grouped into tiers.
+# Fallback chains are defined per tier (not per specific model) so the
+# gateway can always find an available option within a tier.
+models:
+  llama3.2:
+    provider: ollama
+    wire_model: llama3.2:1b
+    tier: fast
+
+tiers:
+  fast:
+    fallback_chain:
+      - llama3.2
+  premium:
+    fallback_chain:
+      - llama3.2
