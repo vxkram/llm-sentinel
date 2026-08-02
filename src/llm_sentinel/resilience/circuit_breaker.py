@@ -3,6 +3,8 @@ from pathlib import Path
 
 from redis.asyncio import Redis
 
+from llm_sentinel.observability.metrics import record_circuit_breaker_transition
+
 _SCRIPTS_DIR = Path(__file__).parent / "scripts"
 
 FAILURE_THRESHOLD = 3
@@ -47,20 +49,33 @@ class CircuitBreaker:
         result = await self._check_script(
             keys=[state_key, trial_key], args=[now_ms, COOLDOWN_MS, TRIAL_TTL_MS]
         )
-        return _decode(result)
+        decision = _decode(result)
+        if decision == "half_open_trial":
+            # The only decision that unambiguously means "just transitioned":
+            # it's returned exactly once, right after the state flips.
+            record_circuit_breaker_transition(provider, model, "open", "half_open")
+        return decision
 
     async def record_success(self, provider: str, model: str) -> None:
         state_key, failures_key, trial_key = self._keys(provider, model)
-        await self._record_success_script(keys=[state_key, failures_key, trial_key], args=[])
+        to_state, from_state = await self._record_success_script(
+            keys=[state_key, failures_key, trial_key], args=[]
+        )
+        to_state, from_state = _decode(to_state), _decode(from_state)
+        if to_state != from_state:
+            record_circuit_breaker_transition(provider, model, from_state, to_state)
 
     async def record_failure(self, provider: str, model: str) -> str:
         state_key, failures_key, trial_key = self._keys(provider, model)
         now_ms = int(time.time() * 1000)
-        result = await self._record_failure_script(
+        to_state, from_state = await self._record_failure_script(
             keys=[failures_key, state_key, trial_key],
             args=[now_ms, WINDOW_MS, FAILURE_THRESHOLD],
         )
-        return _decode(result)
+        to_state, from_state = _decode(to_state), _decode(from_state)
+        if to_state != from_state:
+            record_circuit_breaker_transition(provider, model, from_state, to_state)
+        return to_state
 
     async def status(self, provider: str, model: str) -> dict:
         """Read-only snapshot for admin/dashboard use. Deliberately separate

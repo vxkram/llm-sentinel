@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from llm_sentinel.health_checker.store import HealthStore
+from llm_sentinel.observability.metrics import PROVIDER_HEALTHY
 from llm_sentinel.providers.registry import ProviderRegistry
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,7 @@ async def run_health_prober(registry: ProviderRegistry, store: HealthStore) -> N
             try:
                 result = await client.health_check(wire_model)
                 await store.record(client.name, wire_model, result.healthy, result.latency_ms, result.error)
+                PROVIDER_HEALTHY.labels(provider=client.name, model=wire_model).set(1 if result.healthy else 0)
             except Exception:
                 logger.exception("health probe bookkeeping failed for %s/%s", client.name, wire_model)
         await asyncio.sleep(PROBE_INTERVAL_SECONDS)

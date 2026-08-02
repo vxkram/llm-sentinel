@@ -10,7 +10,8 @@
 -- ARGV[2]: window_ms
 -- ARGV[3]: failure_threshold
 --
--- Returns the resulting state: "open" or "closed"
+-- Returns {to_state, from_state} - from_state == to_state means no
+-- transition happened (metrics code uses this to decide what to count).
 
 local failures_key = KEYS[1]
 local state_key = KEYS[2]
@@ -20,13 +21,14 @@ local window_ms = tonumber(ARGV[2])
 local threshold = tonumber(ARGV[3])
 
 local current_state = redis.call("HGET", state_key, "state")
+local from_state = current_state == false and "closed" or current_state
 
 if current_state == "half_open" then
   redis.call("HSET", state_key, "state", "open", "opened_at", now_ms)
   redis.call("EXPIRE", state_key, 3600)
   redis.call("DEL", failures_key)
   redis.call("DEL", trial_key)
-  return "open"
+  return {"open", from_state}
 end
 
 redis.call("ZADD", failures_key, now_ms, now_ms .. "-" .. math.random(1, 1000000))
@@ -38,7 +40,7 @@ local count = redis.call("ZCARD", failures_key)
 if count >= threshold and current_state ~= "open" then
   redis.call("HSET", state_key, "state", "open", "opened_at", now_ms)
   redis.call("EXPIRE", state_key, 3600)
-  return "open"
+  return {"open", from_state}
 end
 
-return current_state == false and "closed" or current_state
+return {from_state, from_state}
