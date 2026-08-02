@@ -5,6 +5,9 @@ from fastapi import Header, HTTPException, Request
 from pydantic import BaseModel
 
 from llm_sentinel.core.config import get_settings
+from llm_sentinel.observability.tracing import get_tracer
+
+tracer = get_tracer()
 
 
 class RateLimitConfig(BaseModel):
@@ -98,17 +101,18 @@ class AuthenticatedTeam(BaseModel):
 async def require_team(
     request: Request, authorization: str | None = Header(default=None)
 ) -> AuthenticatedTeam:
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401, detail="missing or malformed Authorization header"
-        )
-    api_key = authorization[len("Bearer ") :]
-    store: TeamsStore = request.app.state.teams_store
-    resolved = store.resolve_api_key(api_key)
-    if resolved is None:
-        raise HTTPException(status_code=401, detail="invalid API key")
-    team_id, config = resolved
-    return AuthenticatedTeam(team_id=team_id, config=config)
+    with tracer.start_as_current_span("auth"):
+        if authorization is None or not authorization.startswith("Bearer "):
+            raise HTTPException(
+                status_code=401, detail="missing or malformed Authorization header"
+            )
+        api_key = authorization[len("Bearer ") :]
+        store: TeamsStore = request.app.state.teams_store
+        resolved = store.resolve_api_key(api_key)
+        if resolved is None:
+            raise HTTPException(status_code=401, detail="invalid API key")
+        team_id, config = resolved
+        return AuthenticatedTeam(team_id=team_id, config=config)
 
 
 async def require_admin(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")) -> None:

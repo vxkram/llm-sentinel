@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     admin_api_key: str = "sk-admin-demo-999000"
     audit_log_path: str = "audit.jsonl"
 
+    otlp_endpoint: str | None = None
+
 
 class ModelEntry(BaseModel):
     provider: str

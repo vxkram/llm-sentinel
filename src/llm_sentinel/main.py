@@ -13,9 +13,11 @@ from llm_sentinel.core.config import (
     load_pricing_config,
     load_routing_config,
 )
+from llm_sentinel.core.logging import setup_logging
 from llm_sentinel.core.security import TeamsStore
 from llm_sentinel.health_checker.prober import run_health_prober
 from llm_sentinel.health_checker.store import HealthStore
+from llm_sentinel.observability.tracing import setup_tracing
 from llm_sentinel.providers.registry import ProviderRegistry
 from llm_sentinel.ratelimit.token_bucket import TokenBucket
 from llm_sentinel.resilience.circuit_breaker import CircuitBreaker
@@ -50,10 +52,12 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    setup_logging()
     app = FastAPI(title="llm-sentinel", lifespan=lifespan)
     app.include_router(health.router, prefix="")
     app.include_router(chat.router, prefix="/v1")
     app.include_router(admin.router, prefix="/admin")
+    setup_tracing(app, get_settings().otlp_endpoint)
     return app
 
 
