@@ -7,6 +7,12 @@ teams:
   team-x:
     api_key: key-v1
     allowed_models: [llama3.2]
+    rate_limit:
+      rpm: 10
+      tpm: 10000
+    budget:
+      daily_limit_usd: 1.0
+      monthly_limit_usd: 10.0
 """
 
 TEAMS_V2 = """
@@ -14,6 +20,12 @@ teams:
   team-x:
     api_key: key-v2
     allowed_models: [llama3.2, gpt-4o-mini]
+    rate_limit:
+      rpm: 10
+      tpm: 10000
+    budget:
+      daily_limit_usd: 1.0
+      monthly_limit_usd: 10.0
 """
 
 

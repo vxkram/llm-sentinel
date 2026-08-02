@@ -13,3 +13,4 @@ grafana-data/
 prometheus-data/
 redis-data/
 ollama-data/
+dump.rdb

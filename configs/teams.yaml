@@ -1,5 +1,9 @@
 # Demo teams. Real deployments would keep api_key out of version control;
 # these are throwaway keys for a $0 local/portfolio demo.
+#
+# team-alpha's rpm is deliberately low (3) so a small curl burst demos a 429.
+# team-beta's budget is deliberately tiny so its very first real request
+# demos a hard budget block on the next call.
 teams:
   team-alpha:
     api_key: sk-alpha-demo-000111
@@ -7,8 +11,20 @@ teams:
       - llama3.2
       - gpt-4o-mini
     system_prompt: "You are Team Alpha's assistant. Always answer in a single short sentence."
+    rate_limit:
+      rpm: 3
+      tpm: 3000
+    budget:
+      daily_limit_usd: 5.0
+      monthly_limit_usd: 50.0
   team-beta:
     api_key: sk-beta-demo-222333
     allowed_models:
       - claude-3-5-sonnet
     system_prompt: null
+    rate_limit:
+      rpm: 5
+      tpm: 2000
+    budget:
+      daily_limit_usd: 0.00005
+      monthly_limit_usd: 0.01

@@ -5,10 +5,22 @@ from fastapi import Header, HTTPException, Request
 from pydantic import BaseModel
 
 
+class RateLimitConfig(BaseModel):
+    rpm: int
+    tpm: int
+
+
+class BudgetConfig(BaseModel):
+    daily_limit_usd: float
+    monthly_limit_usd: float
+
+
 class TeamConfig(BaseModel):
     api_key: str
     allowed_models: list[str]
     system_prompt: str | None = None
+    rate_limit: RateLimitConfig
+    budget: BudgetConfig
 
 
 class TeamsConfig(BaseModel):

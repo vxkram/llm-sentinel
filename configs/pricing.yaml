@@ -1,0 +1,13 @@
+# $ per 1,000 tokens. Ollama runs locally, so it's free. Mock OpenAI/Anthropic
+# use their real providers' published per-token pricing so cost math and
+# budget enforcement behave the same way they would against the real APIs.
+pricing:
+  llama3.2:
+    input_per_1k: 0.0
+    output_per_1k: 0.0
+  gpt-4o-mini:
+    input_per_1k: 0.00015
+    output_per_1k: 0.0006
+  claude-3-5-sonnet:
+    input_per_1k: 0.003
+    output_per_1k: 0.015
