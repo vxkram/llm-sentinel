@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -43,7 +48,9 @@ services:
       - OLLAMA_BASE_URL=http://ollama:11434
       - OPENAI_MOCK_BASE_URL=http://mock-openai:8000
       - ANTHROPIC_MOCK_BASE_URL=http://mock-anthropic:8000
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
+      - redis
       - ollama
       - mock-openai
       - mock-anthropic
