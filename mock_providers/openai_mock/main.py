@@ -13,8 +13,10 @@ router = APIRouter()
 
 
 def _reply_text(messages: list[dict]) -> str:
+    system_texts = [m["content"] for m in messages if m["role"] == "system"]
     last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-    return f"[mock-openai] You said: {last_user}"
+    prefix = f"[system={' | '.join(system_texts)}] " if system_texts else ""
+    return f"[mock-openai] {prefix}You said: {last_user}"
 
 
 def _count_tokens(text: str) -> int:

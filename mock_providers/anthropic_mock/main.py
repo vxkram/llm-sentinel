@@ -11,9 +11,10 @@ from mock_providers.common.app_factory import build_mock_app
 router = APIRouter()
 
 
-def _reply_text(messages: list[dict]) -> str:
+def _reply_text(messages: list[dict], system: str = "") -> str:
     last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-    return f"[mock-anthropic] You said: {last_user}"
+    prefix = f"[system={system}] " if system else ""
+    return f"[mock-anthropic] {prefix}You said: {last_user}"
 
 
 def _count_tokens(text: str) -> int:
@@ -74,7 +75,7 @@ async def messages(request: Request):
     msgs = body["messages"]
     model = body["model"]
     system = body.get("system", "")
-    reply = _reply_text(msgs)
+    reply = _reply_text(msgs, system=system)
     input_tokens = sum(_count_tokens(m["content"]) for m in msgs) + (
         _count_tokens(system) if system else 0
     )

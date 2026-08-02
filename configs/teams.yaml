@@ -1,0 +1,14 @@
+# Demo teams. Real deployments would keep api_key out of version control;
+# these are throwaway keys for a $0 local/portfolio demo.
+teams:
+  team-alpha:
+    api_key: sk-alpha-demo-000111
+    allowed_models:
+      - llama3.2
+      - gpt-4o-mini
+    system_prompt: "You are Team Alpha's assistant. Always answer in a single short sentence."
+  team-beta:
+    api_key: sk-beta-demo-222333
+    allowed_models:
+      - claude-3-5-sonnet
+    system_prompt: null

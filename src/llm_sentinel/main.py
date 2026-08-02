@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from llm_sentinel.api.v1 import chat, health
 from llm_sentinel.core.config import get_settings, load_routing_config
+from llm_sentinel.core.security import TeamsStore
 from llm_sentinel.providers.registry import ProviderRegistry
 
 
@@ -12,6 +13,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     routing = load_routing_config()
     app.state.registry = ProviderRegistry(routing, settings)
+    app.state.teams_store = TeamsStore(settings.teams_config_path)
     yield
 
 
