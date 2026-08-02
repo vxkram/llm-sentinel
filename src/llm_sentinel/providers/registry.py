@@ -28,10 +28,17 @@ class ProviderRegistry:
         return client, entry.wire_model
 
     def fallback_chain(self, canonical_model: str) -> list[str]:
+        """The requested model always comes first - the tier's configured
+        chain only supplies the order for what to try *after* that, not a
+        priority override of the model that was actually asked for.
+        """
         entry = self._routing.models.get(canonical_model)
         if entry is None:
             raise ModelNotFoundError(f"unknown model: {canonical_model}")
         tier = self._routing.tiers.get(entry.tier)
         if tier is None:
             return [canonical_model]
-        return tier.fallback_chain
+        return [canonical_model] + [m for m in tier.fallback_chain if m != canonical_model]
+
+    def canonical_models(self) -> list[str]:
+        return list(self._routing.models.keys())

@@ -33,3 +33,27 @@ def test_fallback_chain(registry: ProviderRegistry) -> None:
 def test_fallback_chain_unknown_model_raises(registry: ProviderRegistry) -> None:
     with pytest.raises(ModelNotFoundError):
         registry.fallback_chain("gpt-5-nonexistent")
+
+
+def test_fallback_chain_puts_requested_model_first() -> None:
+    # The configured chain order shouldn't override what was actually asked
+    # for - it only supplies the order to try *after* the requested model.
+    routing = RoutingConfig(
+        models={
+            "gpt-4o-mini": ModelEntry(provider="openai", wire_model="gpt-4o-mini", tier="premium"),
+            "claude-3-5-sonnet": ModelEntry(
+                provider="anthropic", wire_model="claude-3-5-sonnet-20241022", tier="premium"
+            ),
+            "llama3.2": ModelEntry(provider="ollama", wire_model="llama3.2:1b", tier="premium"),
+        },
+        tiers={
+            "premium": Tier(fallback_chain=["gpt-4o-mini", "claude-3-5-sonnet", "llama3.2"]),
+        },
+    )
+    registry = ProviderRegistry(routing, Settings())
+
+    assert registry.fallback_chain("claude-3-5-sonnet") == [
+        "claude-3-5-sonnet",
+        "gpt-4o-mini",
+        "llama3.2",
+    ]

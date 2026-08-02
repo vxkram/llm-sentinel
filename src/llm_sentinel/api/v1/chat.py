@@ -6,14 +6,14 @@ from fastapi.responses import StreamingResponse
 
 from llm_sentinel.budget.cost import compute_cost
 from llm_sentinel.core.security import AuthenticatedTeam, require_team
-from llm_sentinel.providers.base import (
-    ChatRequest,
-    ChatResponse,
-    Message,
-    ProviderClient,
-)
+from llm_sentinel.providers.base import ChatRequest, ChatResponse, Message
 from llm_sentinel.providers.registry import ModelNotFoundError
 from llm_sentinel.ratelimit.estimate import estimate_tokens
+from llm_sentinel.resilience.fallback import (
+    AllProvidersUnavailableError,
+    dispatch_stream_with_fallback,
+    dispatch_with_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,15 @@ def _inject_system_prompt(req: ChatRequest, system_prompt: str) -> ChatRequest:
 
 def _prompt_text(req: ChatRequest) -> str:
     return "\n".join(m.content for m in req.messages)
+
+
+def _fallback_candidates(request: Request, team: AuthenticatedTeam, model: str) -> list[str]:
+    """The requested model's tier-wide fallback chain, restricted to models
+    this team is actually allowed to use - fallback must never become a way
+    to bypass Stage 3's per-team model restriction.
+    """
+    chain = request.app.state.registry.fallback_chain(model)
+    return [m for m in chain if m in team.config.allowed_models]
 
 
 async def _enforce_budget_preflight(request: Request, team: AuthenticatedTeam) -> None:
@@ -89,7 +98,7 @@ async def _enforce_rate_limits(
 async def _reconcile_and_charge(
     request: Request,
     team: AuthenticatedTeam,
-    model: str,
+    served_model: str,
     estimated_prompt: int,
     estimated_completion: int,
     actual_prompt_tokens: int,
@@ -109,7 +118,7 @@ async def _reconcile_and_charge(
         actual=actual_prompt_tokens + actual_completion_tokens,
     )
 
-    cost = compute_cost(pricing, model, actual_prompt_tokens, actual_completion_tokens)
+    cost = compute_cost(pricing, served_model, actual_prompt_tokens, actual_completion_tokens)
     budget = team.config.budget
     result = await tracker.check_and_charge(
         team.team_id, budget.daily_limit_usd, budget.monthly_limit_usd, cost=cost
@@ -124,17 +133,27 @@ async def _reconcile_and_charge(
 
 
 async def _stream_sse(
-    client: ProviderClient,
-    req: ChatRequest,
-    wire_model: str,
     request: Request,
     team: AuthenticatedTeam,
-    canonical_model: str,
+    candidates: list[str],
+    req: ChatRequest,
     estimated_prompt: int,
     estimated_completion: int,
 ) -> AsyncIterator[str]:
+    registry = request.app.state.registry
+    breaker = request.app.state.circuit_breaker
+
+    try:
+        stream, served_model = await dispatch_stream_with_fallback(
+            registry, breaker, candidates, req
+        )
+    except AllProvidersUnavailableError as exc:
+        yield f"data: {{\"error\": \"{exc}\"}}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
     accumulated: list[str] = []
-    async for chunk in client.chat_stream(req, wire_model):
+    async for chunk in stream:
         accumulated.append(chunk.delta)
         yield f"data: {chunk.model_dump_json()}\n\n"
     yield "data: [DONE]\n\n"
@@ -145,7 +164,7 @@ async def _stream_sse(
     # than reconciled against an exact count.
     actual_completion = estimate_tokens("".join(accumulated))
     await _reconcile_and_charge(
-        request, team, canonical_model, estimated_prompt, estimated_completion, estimated_prompt, actual_completion
+        request, team, served_model, estimated_prompt, estimated_completion, estimated_prompt, actual_completion
     )
 
 
@@ -159,31 +178,37 @@ async def chat_completions(
             detail=f"team '{team.team_id}' is not permitted to use model '{req.model}'",
         )
 
+    try:
+        candidates = _fallback_candidates(request, team, req.model)
+    except ModelNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     await _enforce_budget_preflight(request, team)
     estimated_prompt, estimated_completion = await _enforce_rate_limits(request, team, req)
 
     if team.config.system_prompt:
         req = _inject_system_prompt(req, team.config.system_prompt)
 
-    registry = request.app.state.registry
-    try:
-        client, wire_model = registry.resolve(req.model)
-    except ModelNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
     if req.stream:
         return StreamingResponse(
-            _stream_sse(
-                client, req, wire_model, request, team, req.model, estimated_prompt, estimated_completion
-            ),
+            _stream_sse(request, team, candidates, req, estimated_prompt, estimated_completion),
             media_type="text/event-stream",
         )
 
-    resp = await client.chat(req, wire_model)
+    registry = request.app.state.registry
+    breaker = request.app.state.circuit_breaker
+    try:
+        resp, served_model = await dispatch_with_fallback(registry, breaker, candidates, req)
+    except AllProvidersUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if served_model != req.model:
+        resp = resp.model_copy(update={"model": served_model})
+
     await _reconcile_and_charge(
         request,
         team,
-        req.model,
+        served_model,
         estimated_prompt,
         estimated_completion,
         resp.usage.prompt_tokens,

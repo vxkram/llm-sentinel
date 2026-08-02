@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,8 +13,11 @@ from llm_sentinel.core.config import (
     load_routing_config,
 )
 from llm_sentinel.core.security import TeamsStore
+from llm_sentinel.health_checker.prober import run_health_prober
+from llm_sentinel.health_checker.store import HealthStore
 from llm_sentinel.providers.registry import ProviderRegistry
 from llm_sentinel.ratelimit.token_bucket import TokenBucket
+from llm_sentinel.resilience.circuit_breaker import CircuitBreaker
 
 
 @asynccontextmanager
@@ -27,9 +32,18 @@ async def lifespan(app: FastAPI):
     app.state.redis = redis_client
     app.state.token_bucket = TokenBucket(redis_client)
     app.state.budget_tracker = BudgetTracker(redis_client)
+    app.state.circuit_breaker = CircuitBreaker(redis_client)
+    app.state.health_store = HealthStore(redis_client)
+
+    prober_task = asyncio.create_task(
+        run_health_prober(app.state.registry, app.state.health_store)
+    )
 
     yield
 
+    prober_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await prober_task
     await redis_client.aclose()
 
 
