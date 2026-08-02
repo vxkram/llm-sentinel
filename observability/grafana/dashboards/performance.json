@@ -1,0 +1,58 @@
+{
+  "title": "llm-sentinel: Performance",
+  "uid": "llm-sentinel-performance",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "tags": ["llm-sentinel"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Latency percentiles by provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(llm_sentinel_request_latency_seconds_bucket[5m])) by (le, provider))",
+          "legendFormat": "p50 {{provider}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(llm_sentinel_request_latency_seconds_bucket[5m])) by (le, provider))",
+          "legendFormat": "p95 {{provider}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(llm_sentinel_request_latency_seconds_bucket[5m])) by (le, provider))",
+          "legendFormat": "p99 {{provider}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "id": 2,
+      "title": "Requests per second by provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_requests_total[5m])) by (provider)",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Token throughput (tokens/sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_tokens_total[5m])) by (model, direction)",
+          "legendFormat": "{{model}} ({{direction}})"
+        }
+      ]
+    }
+  ]
+}

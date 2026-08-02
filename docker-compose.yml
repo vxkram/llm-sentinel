@@ -49,11 +49,47 @@ services:
       - OPENAI_MOCK_BASE_URL=http://mock-openai:8000
       - ANTHROPIC_MOCK_BASE_URL=http://mock-anthropic:8000
       - REDIS_URL=redis://redis:6379/0
+      - OTLP_ENDPOINT=http://jaeger:4318/v1/traces
     depends_on:
       - redis
       - ollama
       - mock-openai
       - mock-anthropic
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # UI
+      - "4318:4318" # OTLP HTTP receiver
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./observability/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    depends_on:
+      - gateway
+      - alertmanager
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards/json
+    depends_on:
+      - prometheus
 
 volumes:
   ollama-data:

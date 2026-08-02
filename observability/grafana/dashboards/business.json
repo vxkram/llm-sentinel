@@ -1,0 +1,71 @@
+{
+  "title": "llm-sentinel: Business",
+  "uid": "llm-sentinel-business",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "30s",
+  "tags": ["llm-sentinel"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Budget utilization by team",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "llm_sentinel_budget_utilization_ratio", "legendFormat": "{{team}} ({{period}})" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "unit": "percentunit",
+          "thresholds": {
+            "steps": [
+              { "value": 0, "color": "green" },
+              { "value": 0.8, "color": "orange" },
+              { "value": 1.0, "color": "red" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Cost per team ($/hr, rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_cost_usd_total[1h])) by (team) * 3600",
+          "legendFormat": "{{team}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    },
+    {
+      "id": 3,
+      "title": "Request volume by team",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_requests_total[5m])) by (team)",
+          "legendFormat": "{{team}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Total cost charged (all-time counter)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(llm_sentinel_cost_usd_total) by (team)", "legendFormat": "{{team}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } }
+    }
+  ]
+}

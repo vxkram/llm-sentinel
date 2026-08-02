@@ -1,0 +1,81 @@
+{
+  "title": "llm-sentinel: Operations",
+  "uid": "llm-sentinel-operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s",
+  "tags": ["llm-sentinel"],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Provider health",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "llm_sentinel_provider_healthy", "legendFormat": "{{provider}}/{{model}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Circuit breaker state",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        { "expr": "llm_sentinel_circuit_breaker_state", "legendFormat": "{{provider}}/{{model}}" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "CLOSED", "color": "green" }, "1": { "text": "HALF_OPEN", "color": "yellow" }, "2": { "text": "OPEN", "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Circuit breaker transitions (rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_circuit_breaker_transitions_total[5m])) by (provider, model, to_state)",
+          "legendFormat": "{{provider}}/{{model}} -> {{to_state}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Error rate by provider",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_errors_total[5m])) by (provider, error_type)",
+          "legendFormat": "{{provider}} ({{error_type}})"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Fallback trigger rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(llm_sentinel_fallback_triggered_total[5m])) by (from_model, to_model)",
+          "legendFormat": "{{from_model}} -> {{to_model}}"
+        }
+      ]
+    }
+  ]
+}

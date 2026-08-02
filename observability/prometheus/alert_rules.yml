@@ -1,0 +1,38 @@
+groups:
+  - name: llm-sentinel
+    rules:
+      - alert: HighProviderErrorRate
+        expr: >
+          sum(rate(llm_sentinel_errors_total[5m])) by (provider)
+          /
+          sum(rate(llm_sentinel_requests_total[5m])) by (provider) > 0.2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate for provider {{ $labels.provider }}"
+          description: "Error rate for {{ $labels.provider }} exceeded 20% over the last 5 minutes."
+
+      - alert: TeamApproachingBudget
+        expr: llm_sentinel_budget_utilization_ratio > 0.8
+        labels:
+          severity: warning
+        annotations:
+          summary: "Team {{ $labels.team }} is above 80% of its {{ $labels.period }} budget"
+
+      - alert: CircuitBreakerOpen
+        expr: increase(llm_sentinel_circuit_breaker_transitions_total{to_state="open"}[1m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker opened for {{ $labels.provider }}/{{ $labels.model }}"
+
+      - alert: HighLatencyP99
+        expr: >
+          histogram_quantile(0.99, sum(rate(llm_sentinel_request_latency_seconds_bucket[5m])) by (le, provider))
+          > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P99 latency for provider {{ $labels.provider }} exceeds 5s"

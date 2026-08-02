@@ -1,0 +1,13 @@
+route:
+  receiver: default
+  group_by: [alertname, provider, team]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+
+receivers:
+  - name: default
+    # No delivery channel configured for this portfolio demo - alerts are
+    # visible in the Alertmanager UI (http://localhost:9093) and Prometheus's
+    # own Alerts page without needing anything further. To route to Slack,
+    # add a slack_configs block here with a real incoming-webhook api_url.
