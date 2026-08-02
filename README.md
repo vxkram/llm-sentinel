@@ -48,6 +48,19 @@ Most portfolio projects that touch LLMs are "call an API, do something with the 
 
 This is how the whole project was actually built and verified — Docker isn't required.
 
+**One command**, once the venv/Redis/Ollama prerequisites below are set up once:
+
+```bash
+./run.sh
+```
+
+Starts Redis, both mock providers, and the gateway; walks through every major
+behavior (a real completion, rate limiting, automatic failover, budget
+enforcement, a live admin change) with real requests and real output; then
+tails the gateway log so you can keep poking at it. Ctrl+C stops everything.
+
+Or step by step, if you'd rather run pieces individually:
+
 ```bash
 # 1. Python 3.12 venv
 python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
