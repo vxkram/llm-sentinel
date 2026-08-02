@@ -28,3 +28,18 @@ teams:
     budget:
       daily_limit_usd: 0.00005
       monthly_limit_usd: 0.01
+  # Deliberately generous limits: a stable target for the load test
+  # (tests/load/locustfile.py) rather than a demo team, so it doesn't need
+  # temporary tuning or interfere with team-alpha/team-beta's tight limits.
+  team-loadtest:
+    api_key: sk-loadtest-demo-777888
+    allowed_models:
+      - gpt-4o-mini
+      - claude-3-5-sonnet
+    system_prompt: null
+    rate_limit:
+      rpm: 100000
+      tpm: 100000000
+    budget:
+      daily_limit_usd: 1000.0
+      monthly_limit_usd: 10000.0

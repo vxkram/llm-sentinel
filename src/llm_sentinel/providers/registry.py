@@ -42,3 +42,7 @@ class ProviderRegistry:
 
     def canonical_models(self) -> list[str]:
         return list(self._routing.models.keys())
+
+    async def aclose_all(self) -> None:
+        for client in self._clients.values():
+            await client.aclose()

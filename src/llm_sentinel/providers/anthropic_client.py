@@ -37,11 +37,14 @@ class AnthropicClient:
     ):
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._timeout = timeout
-        self._transport = transport
+        # A single persistent client (not one per call) so requests reuse
+        # pooled/keep-alive connections instead of paying a fresh
+        # connect+teardown cost every time - this showed up as measurable
+        # gateway overhead under load before the fix.
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
 
-    def _client(self, timeout: float) -> httpx.AsyncClient:
-        return httpx.AsyncClient(timeout=timeout, transport=self._transport)
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     def _headers(self) -> dict[str, str]:
         return {"x-api-key": self._api_key, "anthropic-version": "2023-06-01"}
@@ -66,12 +69,11 @@ class AnthropicClient:
     async def chat(self, req: ChatRequest, wire_model: str) -> ChatResponse:
         start = time.monotonic()
         payload = self._build_payload(req, wire_model, stream=False)
-        async with self._client(self._timeout) as client:
-            resp = await client.post(
-                f"{self._base_url}/v1/messages", json=payload, headers=self._headers()
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await self._client.post(
+            f"{self._base_url}/v1/messages", json=payload, headers=self._headers()
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
         latency_ms = (time.monotonic() - start) * 1000
         content = "".join(block["text"] for block in data["content"] if block["type"] == "text")
@@ -95,12 +97,9 @@ class AnthropicClient:
         self, req: ChatRequest, wire_model: str
     ) -> AsyncIterator[StreamChunk]:
         payload = self._build_payload(req, wire_model, stream=True)
-        async with (
-            self._client(self._timeout) as client,
-            client.stream(
-                "POST", f"{self._base_url}/v1/messages", json=payload, headers=self._headers()
-            ) as resp,
-        ):
+        async with self._client.stream(
+            "POST", f"{self._base_url}/v1/messages", json=payload, headers=self._headers()
+        ) as resp:
             resp.raise_for_status()
             current_event: str | None = None
             async for line in resp.aiter_lines():
@@ -125,9 +124,8 @@ class AnthropicClient:
     async def health_check(self, wire_model: str) -> HealthProbeResult:
         start = time.monotonic()
         try:
-            async with self._client(5.0) as client:
-                resp = await client.get(f"{self._base_url}/healthz")
-                resp.raise_for_status()
+            resp = await self._client.get(f"{self._base_url}/healthz", timeout=5.0)
+            resp.raise_for_status()
             return HealthProbeResult(healthy=True, latency_ms=(time.monotonic() - start) * 1000)
         except Exception as exc:  # noqa: BLE001 - health probes must never raise
             return HealthProbeResult(

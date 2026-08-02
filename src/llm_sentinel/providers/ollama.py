@@ -16,9 +16,21 @@ from llm_sentinel.providers.base import (
 class OllamaClient:
     name = "ollama"
 
-    def __init__(self, base_url: str, timeout: float = 60.0):
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self._base_url = base_url.rstrip("/")
-        self._timeout = timeout
+        # A single persistent client (not one per call) so requests reuse
+        # pooled/keep-alive connections instead of paying a fresh
+        # connect+teardown cost every time - this showed up as measurable
+        # gateway overhead under load before the fix.
+        self._client = httpx.AsyncClient(timeout=timeout, transport=transport)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
     async def chat(self, req: ChatRequest, wire_model: str) -> ChatResponse:
         start = time.monotonic()
@@ -28,10 +40,9 @@ class OllamaClient:
             "stream": False,
             "options": {k: v for k, v in {"temperature": req.temperature}.items() if v is not None},
         }
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(f"{self._base_url}/api/chat", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await self._client.post(f"{self._base_url}/api/chat", json=payload)
+        resp.raise_for_status()
+        data = resp.json()
 
         latency_ms = (time.monotonic() - start) * 1000
         prompt_tokens = data.get("prompt_eval_count", 0)
@@ -58,10 +69,7 @@ class OllamaClient:
             "messages": [m.model_dump() for m in req.messages],
             "stream": True,
         }
-        async with (
-            httpx.AsyncClient(timeout=self._timeout) as client,
-            client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp,
-        ):
+        async with self._client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
@@ -76,9 +84,8 @@ class OllamaClient:
     async def health_check(self, wire_model: str) -> HealthProbeResult:
         start = time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self._base_url}/api/version")
-                resp.raise_for_status()
+            resp = await self._client.get(f"{self._base_url}/api/version", timeout=5.0)
+            resp.raise_for_status()
             return HealthProbeResult(
                 healthy=True, latency_ms=(time.monotonic() - start) * 1000
             )

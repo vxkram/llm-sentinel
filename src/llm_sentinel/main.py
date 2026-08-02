@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
     prober_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await prober_task
+    await app.state.registry.aclose_all()
     await redis_client.aclose()
 
 
