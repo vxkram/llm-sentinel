@@ -98,7 +98,7 @@ curl -X POST http://localhost:8010/v1/chat/completions \
 docker compose up --build
 ```
 
-Brings up the gateway, both mocks, Ollama, Redis, Jaeger, Prometheus, Alertmanager, and Grafana (`localhost:3000`) together. **This has been YAML/JSON-validated but not build/run-verified** — Docker isn't installed in the environment this was built in. Every metric name, alert expression, and dashboard panel was checked against real values produced by the local (non-Docker) setup above, so the definitions are correct; the containers running them together haven't been.
+Brings up the gateway, both mocks, Ollama, Redis, Jaeger, Prometheus, Alertmanager, and Grafana (`localhost:3000`) together — build-and-run verified: all 9 containers came up healthy, a real chat completion round-tripped through the gateway to Ollama, fault-injection/fallback/circuit-breaking behaved as described below, the live admin PATCH applied with no restart, Prometheus was scraping the gateway with all 4 alert rules loaded, and Grafana had its Prometheus datasource and all 3 dashboards auto-provisioned.
 
 ## See it actually work
 
@@ -184,7 +184,6 @@ tests/{unit,integration,load}/
 
 ## Known limitations
 
-- The docker-compose stack (Jaeger/Prometheus/Grafana/Alertmanager included) is config-validated but not run-verified on this machine.
 - The load test was run against a single local uvicorn process, not a production multi-replica deployment.
 - Circuit breaker thresholds, rate limits, and budgets in `configs/` are tuned for demoability, not production traffic patterns.
 
