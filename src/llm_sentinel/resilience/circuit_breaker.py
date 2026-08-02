@@ -61,3 +61,18 @@ class CircuitBreaker:
             args=[now_ms, WINDOW_MS, FAILURE_THRESHOLD],
         )
         return _decode(result)
+
+    async def status(self, provider: str, model: str) -> dict:
+        """Read-only snapshot for admin/dashboard use. Deliberately separate
+        from check() - that method can claim the half-open trial ticket as a
+        side effect, which a status poll must never do.
+        """
+        state_key, failures_key, _ = self._keys(provider, model)
+        state = await self._redis.hget(state_key, "state")
+        opened_at = await self._redis.hget(state_key, "opened_at")
+        failure_count = await self._redis.zcard(failures_key)
+        return {
+            "state": _decode(state) if state is not None else "closed",
+            "opened_at": float(opened_at) if opened_at is not None else None,
+            "recent_failure_count": failure_count,
+        }

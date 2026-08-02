@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
-from llm_sentinel.api.v1 import chat, health
+from llm_sentinel.admin.audit import AuditLog
+from llm_sentinel.api.v1 import admin, chat, health
 from llm_sentinel.budget.tracker import BudgetTracker
 from llm_sentinel.core.config import (
     get_settings,
@@ -34,6 +35,7 @@ async def lifespan(app: FastAPI):
     app.state.budget_tracker = BudgetTracker(redis_client)
     app.state.circuit_breaker = CircuitBreaker(redis_client)
     app.state.health_store = HealthStore(redis_client)
+    app.state.audit_log = AuditLog(redis_client, settings.audit_log_path)
 
     prober_task = asyncio.create_task(
         run_health_prober(app.state.registry, app.state.health_store)
@@ -51,6 +53,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="llm-sentinel", lifespan=lifespan)
     app.include_router(health.router, prefix="")
     app.include_router(chat.router, prefix="/v1")
+    app.include_router(admin.router, prefix="/admin")
     return app
 
 

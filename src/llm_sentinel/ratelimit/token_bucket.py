@@ -48,3 +48,10 @@ class TokenBucket:
         await self._reconcile_script(
             keys=[key], args=[capacity, refill_rate_per_sec, estimated, actual, now_ms]
         )
+
+    async def peek(self, key: str) -> float | None:
+        """Read-only: current token count without consuming or refilling.
+        For admin/dashboard use, distinct from check_and_consume.
+        """
+        tokens = await self._redis.hget(key, "tokens")
+        return float(tokens) if tokens is not None else None

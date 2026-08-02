@@ -38,12 +38,18 @@ class BudgetTracker:
             (_SCRIPTS_DIR / "budget_check.lua").read_text()
         )
 
+    @staticmethod
+    def _keys(team_id: str, now: datetime) -> tuple[str, str]:
+        return (
+            f"budget:{team_id}:daily:{now.strftime('%Y-%m-%d')}",
+            f"budget:{team_id}:monthly:{now.strftime('%Y-%m')}",
+        )
+
     async def check_and_charge(
         self, team_id: str, daily_limit: float, monthly_limit: float, cost: float
     ) -> BudgetResult:
         now = datetime.now(UTC)
-        daily_key = f"budget:{team_id}:daily:{now.strftime('%Y-%m-%d')}"
-        monthly_key = f"budget:{team_id}:monthly:{now.strftime('%Y-%m')}"
+        daily_key, monthly_key = self._keys(team_id, now)
 
         allowed, daily_spend, monthly_spend, warning = await self._check_script(
             keys=[daily_key, monthly_key],
@@ -60,4 +66,15 @@ class BudgetTracker:
             daily_spend=float(daily_spend),
             monthly_spend=float(monthly_spend),
             warning=bool(int(warning)),
+        )
+
+    async def current_spend(self, team_id: str) -> tuple[float, float]:
+        """Read-only: (daily_spend, monthly_spend) without charging anything.
+        For admin/dashboard use, distinct from check_and_charge.
+        """
+        daily_key, monthly_key = self._keys(team_id, datetime.now(UTC))
+        daily, monthly = await self._redis.mget(daily_key, monthly_key)
+        return (
+            float(daily) if daily is not None else 0.0,
+            float(monthly) if monthly is not None else 0.0,
         )

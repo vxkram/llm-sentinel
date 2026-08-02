@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     routing_config_path: str = "configs/routing.yaml"
     pricing_config_path: str = "configs/pricing.yaml"
 
+    admin_api_key: str = "sk-admin-demo-999000"
+    audit_log_path: str = "audit.jsonl"
+
 
 class ModelEntry(BaseModel):
     provider: str

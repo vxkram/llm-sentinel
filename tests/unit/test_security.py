@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 from llm_sentinel.core.security import TeamsStore
 
 TEAMS_V1 = """
@@ -64,3 +66,54 @@ def test_hot_reload_picks_up_config_changes(tmp_path) -> None:
     assert resolved is not None
     assert resolved[1].allowed_models == ["llama3.2", "gpt-4o-mini"]
     assert store.resolve_api_key("key-v1") is None
+
+
+def test_get_team_and_list_teams(tmp_path) -> None:
+    path = tmp_path / "teams.yaml"
+    path.write_text(TEAMS_V1)
+    store = TeamsStore(str(path))
+
+    assert store.get_team("team-x").allowed_models == ["llama3.2"]
+    assert store.get_team("nonexistent") is None
+    assert list(store.list_teams().keys()) == ["team-x"]
+
+
+def test_update_team_merges_nested_dict_fields(tmp_path) -> None:
+    path = tmp_path / "teams.yaml"
+    path.write_text(TEAMS_V1)
+    store = TeamsStore(str(path))
+
+    updated = store.update_team("team-x", {"rate_limit": {"rpm": 99}})
+
+    assert updated.rate_limit.rpm == 99
+    assert updated.rate_limit.tpm == 10000  # untouched sibling field survives the merge
+
+
+def test_update_team_replaces_non_dict_fields(tmp_path) -> None:
+    path = tmp_path / "teams.yaml"
+    path.write_text(TEAMS_V1)
+    store = TeamsStore(str(path))
+
+    updated = store.update_team("team-x", {"allowed_models": ["claude-3-5-sonnet"]})
+
+    assert updated.allowed_models == ["claude-3-5-sonnet"]
+
+
+def test_update_team_persists_to_disk(tmp_path) -> None:
+    path = tmp_path / "teams.yaml"
+    path.write_text(TEAMS_V1)
+    store = TeamsStore(str(path))
+
+    store.update_team("team-x", {"rate_limit": {"rpm": 42}})
+
+    reloaded = TeamsStore(str(path))
+    assert reloaded.get_team("team-x").rate_limit.rpm == 42
+
+
+def test_update_team_unknown_team_raises(tmp_path) -> None:
+    path = tmp_path / "teams.yaml"
+    path.write_text(TEAMS_V1)
+    store = TeamsStore(str(path))
+
+    with pytest.raises(KeyError):
+        store.update_team("nonexistent", {"rate_limit": {"rpm": 1}})

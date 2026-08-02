@@ -15,6 +15,7 @@ class ChatRequest(BaseModel):
     stream: bool = False
     max_tokens: int | None = None
     temperature: float | None = None
+    priority: Literal["realtime", "batch"] = "realtime"
 
 
 class Usage(BaseModel):

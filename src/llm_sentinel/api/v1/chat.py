@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from llm_sentinel.budget.cost import compute_cost
 from llm_sentinel.core.security import AuthenticatedTeam, require_team
+from llm_sentinel.priority.concurrency import semaphore_for
 from llm_sentinel.providers.base import ChatRequest, ChatResponse, Message
 from llm_sentinel.providers.registry import ModelNotFoundError
 from llm_sentinel.ratelimit.estimate import estimate_tokens
@@ -142,20 +143,24 @@ async def _stream_sse(
 ) -> AsyncIterator[str]:
     registry = request.app.state.registry
     breaker = request.app.state.circuit_breaker
-
-    try:
-        stream, served_model = await dispatch_stream_with_fallback(
-            registry, breaker, candidates, req
-        )
-    except AllProvidersUnavailableError as exc:
-        yield f"data: {{\"error\": \"{exc}\"}}\n\n"
-        yield "data: [DONE]\n\n"
-        return
-
     accumulated: list[str] = []
-    async for chunk in stream:
-        accumulated.append(chunk.delta)
-        yield f"data: {chunk.model_dump_json()}\n\n"
+
+    # Held for the stream's full duration, not just the initial dispatch - a
+    # slow batch-priority stream should count against batch concurrency for
+    # as long as the connection is actually open.
+    async with semaphore_for(req.priority):
+        try:
+            stream, served_model = await dispatch_stream_with_fallback(
+                registry, breaker, candidates, req
+            )
+        except AllProvidersUnavailableError as exc:
+            yield f"data: {{\"error\": \"{exc}\"}}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        async for chunk in stream:
+            accumulated.append(chunk.delta)
+            yield f"data: {chunk.model_dump_json()}\n\n"
     yield "data: [DONE]\n\n"
 
     # Streaming responses don't carry a usage payload in this gateway's SSE
@@ -197,10 +202,11 @@ async def chat_completions(
 
     registry = request.app.state.registry
     breaker = request.app.state.circuit_breaker
-    try:
-        resp, served_model = await dispatch_with_fallback(registry, breaker, candidates, req)
-    except AllProvidersUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    async with semaphore_for(req.priority):
+        try:
+            resp, served_model = await dispatch_with_fallback(registry, breaker, candidates, req)
+        except AllProvidersUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if served_model != req.model:
         resp = resp.model_copy(update={"model": served_model})
