@@ -6,11 +6,22 @@ models:
     provider: ollama
     wire_model: llama3.2:1b
     tier: fast
+  gpt-4o-mini:
+    provider: openai
+    wire_model: gpt-4o-mini
+    tier: fast
+  claude-3-5-sonnet:
+    provider: anthropic
+    wire_model: claude-3-5-sonnet-20241022
+    tier: premium
 
 tiers:
   fast:
     fallback_chain:
       - llama3.2
+      - gpt-4o-mini
   premium:
     fallback_chain:
+      - gpt-4o-mini
+      - claude-3-5-sonnet
       - llama3.2

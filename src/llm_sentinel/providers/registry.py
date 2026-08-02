@@ -1,6 +1,8 @@
 from llm_sentinel.core.config import RoutingConfig, Settings
+from llm_sentinel.providers.anthropic_client import AnthropicClient
 from llm_sentinel.providers.base import ProviderClient
 from llm_sentinel.providers.ollama import OllamaClient
+from llm_sentinel.providers.openai_client import OpenAIClient
 
 
 class ModelNotFoundError(Exception):
@@ -12,6 +14,8 @@ class ProviderRegistry:
         self._routing = routing
         self._clients: dict[str, ProviderClient] = {
             "ollama": OllamaClient(settings.ollama_base_url),
+            "openai": OpenAIClient(settings.openai_mock_base_url),
+            "anthropic": AnthropicClient(settings.anthropic_mock_base_url),
         }
 
     def resolve(self, canonical_model: str) -> tuple[ProviderClient, str]:
