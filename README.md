@@ -100,6 +100,30 @@ docker compose up --build
 
 Brings up the gateway, both mocks, Ollama, Redis, Jaeger, Prometheus, Alertmanager, and Grafana (`localhost:3000`) together — build-and-run verified: all 9 containers came up healthy, a real chat completion round-tripped through the gateway to Ollama, fault-injection/fallback/circuit-breaking behaved as described below, the live admin PATCH applied with no restart, Prometheus was scraping the gateway with all 4 alert rules loaded, and Grafana had its Prometheus datasource and all 3 dashboards auto-provisioned.
 
+## Screenshots
+
+All captured from the actual docker-compose stack, driven by real traffic (a fault was injected against the mock OpenAI provider until the circuit breaker genuinely tripped) — nothing staged.
+
+**Grafana — Operations dashboard**, mid-failover: the circuit breaker for `openai/gpt-4o-mini` has tripped `OPEN`, the error-rate and fallback-trigger-rate graphs show the real spike, and provider health still reads `UP` across all three backends because the gateway itself never went down.
+
+![Grafana Operations dashboard showing an open circuit breaker and fallback trigger rate](docs/screenshots/grafana-operations.png)
+
+**Grafana — Business dashboard**: per-team budget gauges (team-beta genuinely over its intentionally-tiny demo budget at 126%), request volume, and real accumulated cost in USD.
+
+![Grafana Business dashboard showing budget utilization and cost per team](docs/screenshots/grafana-business.png)
+
+**Grafana — Performance dashboard**: p50/p95/p99 latency and token throughput broken out per provider.
+
+![Grafana Performance dashboard showing latency percentiles and token throughput](docs/screenshots/grafana-performance.png)
+
+**Jaeger — trace search**, filtered to `POST /v1/chat/completions`: the two 14-span, 4-error traces are the requests that hit the injected fault, retried, and fell back.
+
+![Jaeger trace search showing chat completion requests, some with errors from the injected fault](docs/screenshots/jaeger-search.png)
+
+**Jaeger — trace detail** for one request: the full lifecycle end to end — `auth` → `budget_check` → `rate_limit_check` → `provider_dispatch` → `response_processing` — each as its own span.
+
+![Jaeger trace detail showing spans for auth, budget check, rate limit check, provider dispatch, and response processing](docs/screenshots/jaeger-trace-detail.png)
+
 ## See it actually work
 
 **Automatic failover.** Fault-inject the mock to simulate an outage, then watch the gateway keep serving from a backup provider:
